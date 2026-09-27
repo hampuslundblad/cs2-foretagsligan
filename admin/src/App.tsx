@@ -25,7 +25,9 @@ export default function App() {
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [teams, setTeams] = useState<TeamsFile>({});
   const [players, setPlayers] = useState<PlayersFile>({});
-  const [demoPath, setDemoPath] = useState("");
+  const [fetchFaceitData, setFetchFaceitData] = useState(
+    () => localStorage.getItem("fetch-faceit-data") !== "false"
+  );
   const [status, setStatus] = useState<string>("");
 
   useEffect(() => {
@@ -34,42 +36,65 @@ export default function App() {
     getJson<PlayersFile>("players.json").then(setPlayers);
   }, []);
 
+  function toggleFaceitFetching(enabled: boolean) {
+    setFetchFaceitData(enabled);
+    localStorage.setItem("fetch-faceit-data", String(enabled));
+  }
+
   async function runParser() {
-    setStatus("Parsing demo...");
-    const res = await fetch(`${API}/parse-demo`, {
+    setStatus("Parsing new demos...");
+    const res = await fetch(`${API}/parse-demos`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path: demoPath }),
     });
     const data = await res.json();
     if (data.error) {
       setStatus(`Parser error: ${data.error}`);
       return;
     }
-    setStatus(`Found ${data.players.length} players. Resolving FACEIT data...`);
+    if (data.parsed.length === 0 && data.errors.length === 0) {
+      setStatus("No new demos to parse.");
+      return;
+    }
 
-    const updated: PlayersFile = { ...players };
+    setStatus(
+      fetchFaceitData
+        ? `Found ${data.players.length} players. Resolving FACEIT data...`
+        : `Found ${data.players.length} players. FACEIT lookup is disabled.`
+    );
+
+    const updatedPlayers: PlayersFile = { ...players };
     for (const p of data.players as { steam_id: string; nickname: string }[]) {
-      if (updated[p.steam_id]) continue; // already known, skip re-fetch
+      if (!updatedPlayers[p.steam_id]) {
+        updatedPlayers[p.steam_id] = { nickname: p.nickname };
+      }
+      if (!fetchFaceitData || updatedPlayers[p.steam_id].faceit) continue;
+
       const resolveRes = await fetch(`${API}/faceit/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ steam_id: p.steam_id }),
       });
       const resolved = await resolveRes.json();
-      updated[p.steam_id] = {
-        faceit_id: resolved.faceit_id ?? null,
-        nickname: resolved.nickname ?? p.nickname,
-        avatar: resolved.avatar ?? null,
-        elo: resolved.elo ?? null,
-        level: resolved.level ?? null,
-        kd: resolved.kd ?? null,
-        winrate_pct: resolved.winrate_pct ?? null,
-        unresolved: !!resolved.unresolved,
+      updatedPlayers[p.steam_id] = {
+        ...updatedPlayers[p.steam_id],
+        faceit: {
+          faceit_id: resolved.faceit_id ?? null,
+          avatar: resolved.avatar ?? null,
+          elo: resolved.elo ?? null,
+          level: resolved.level ?? null,
+          kd: resolved.kd ?? null,
+          winrate_pct: resolved.winrate_pct ?? null,
+          unresolved: !!resolved.unresolved,
+        },
       };
     }
-    setPlayers(updated);
-    setStatus("Done. Review below, then click Save & Publish.");
+    setPlayers(updatedPlayers);
+    if (data.errors.length > 0) {
+      const failedDemos = data.errors.map((error: { filename: string }) => error.filename).join(", ");
+      setStatus(`Parsed ${data.parsed.length} demo(s), but failed: ${failedDemos}.`);
+      return;
+    }
+    setStatus(`Parsed ${data.parsed.length} demo(s). Review below, then click Save & Publish.`);
   }
 
   async function saveAll() {
@@ -107,84 +132,145 @@ export default function App() {
   }
 
   return (
-    <div style={{ fontFamily: "sans-serif", padding: 24, maxWidth: 960 }}>
-      <h1>CS2 Foretagsligan — Admin</h1>
-      <p style={{ color: "#666" }}>
-        Local-only tool. Nothing here is deployed to GitHub Pages.
-      </p>
+    <main className="admin-shell">
+      <header className="admin-header">
+        <div>
+          <p className="eyebrow">CS2 Foretagsligan</p>
+          <h1>League control room</h1>
+          <p className="admin-intro">
+            Manage match data, player profiles, and team assignments from your
+            local workspace.
+          </p>
+        </div>
+        <span className="local-badge">Local only</span>
+      </header>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2>1. Import a demo</h2>
-        <input
-          style={{ width: 400 }}
-          placeholder="/path/to/match.dem"
-          value={demoPath}
-          onChange={(e) => setDemoPath(e.target.value)}
-        />
-        <button onClick={runParser} style={{ marginLeft: 8 }}>
-          Parse + resolve FACEIT
-        </button>
-      </section>
+      <div className="admin-grid">
+        <section className="admin-card import-card">
+          <div className="card-heading">
+            <span className="step-number">01</span>
+            <div>
+              <h2>Import demos</h2>
+              <p>Bring the latest match data into the league.</p>
+            </div>
+          </div>
+          <p className="card-copy">
+            Place <code>.dem</code> files in <code>demos/</code>. Processed
+            files are tracked in <code>public/data/parsed-demos.json</code>.
+          </p>
+          <label className="faceit-toggle">
+            <input
+              type="checkbox"
+              checked={fetchFaceitData}
+              onChange={(event) => toggleFaceitFetching(event.target.checked)}
+            />
+            <span>Fetch FACEIT data for newly imported players</span>
+          </label>
+          <button className="button button-primary" onClick={runParser}>
+            Parse demos
+          </button>
+        </section>
 
-      <section style={{ marginBottom: 32 }}>
-        <h2>2. Players &amp; team assignment</h2>
-        <table width="100%" cellPadding={6}>
-          <thead>
-            <tr style={{ textAlign: "left" }}>
-              <th>Nickname</th>
-              <th>Elo</th>
-              <th>Level</th>
-              <th>K/D</th>
-              <th>Win%</th>
-              <th>Team</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(players).map(([steamId, p]) => (
-              <tr key={steamId} style={{ opacity: p.unresolved ? 0.5 : 1 }}>
-                <td>{p.nickname}{p.unresolved && " ⚠️ unresolved"}</td>
-                <td>{p.elo ?? "-"}</td>
-                <td>{p.level ?? "-"}</td>
-                <td>{p.kd ?? "-"}</td>
-                <td>{p.winrate_pct ?? "-"}</td>
-                <td>
-                  <select
-                    value={teamOf(steamId)}
-                    onChange={(e) => assignTeam(steamId, e.target.value)}
-                  >
-                    <option value="">-- unassigned --</option>
-                    {Object.entries(teams).map(([id, t]) => (
-                      <option key={id} value={id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-
-      <section style={{ marginBottom: 32 }}>
-        <h2>3. Divisions (edit teams.json manually for now)</h2>
-        <ul>
-          {divisions.map((d) => (
-            <li key={d.id}>
-              {d.name} — teams:{" "}
-              {Object.values(teams)
+        <section className="admin-card divisions-card">
+          <div className="card-heading">
+            <span className="step-number">02</span>
+            <div>
+              <h2>Divisions</h2>
+              <p>Current team placement by division.</p>
+            </div>
+          </div>
+          <ul className="division-list">
+            {divisions.map((d) => {
+              const divisionTeams = Object.values(teams)
                 .filter((t) => t.division_id === d.id)
-                .map((t) => t.name)
-                .join(", ") || "none"}
-            </li>
-          ))}
-        </ul>
+                .map((t) => t.name);
+
+              return (
+                <li key={d.id}>
+                  <strong>{d.name}</strong>
+                  <span>{divisionTeams.join(", ") || "No teams assigned"}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="card-note">Edit divisions directly in teams.json for now.</p>
+        </section>
+      </div>
+
+      <section className="admin-card players-card">
+        <div className="card-heading">
+          <span className="step-number">03</span>
+          <div>
+            <h2>Players &amp; team assignment</h2>
+            <p>Review imported profiles and assign each player to a roster.</p>
+          </div>
+          <span className="player-count">{Object.keys(players).length} players</span>
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Nickname</th>
+                <th>Elo</th>
+                <th>Level</th>
+                <th>K/D</th>
+                <th>Win rate</th>
+                <th>Team</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(players).map(([steamId, p]) => (
+                <tr
+                  key={steamId}
+                  className={p.faceit?.unresolved ? "is-unresolved" : undefined}
+                >
+                  <td>
+                    <span className="player-name">{p.nickname}</span>
+                    {p.faceit?.unresolved && (
+                      <span className="unresolved-label">Unresolved</span>
+                    )}
+                  </td>
+                  <td>{p.faceit?.elo ?? "—"}</td>
+                  <td>{p.faceit?.level ?? "—"}</td>
+                  <td>{p.faceit?.kd ?? "—"}</td>
+                  <td>{p.faceit?.winrate_pct ?? "—"}</td>
+                  <td>
+                    <select
+                      aria-label={`Assign ${p.nickname} to a team`}
+                      value={teamOf(steamId)}
+                      onChange={(e) => assignTeam(steamId, e.target.value)}
+                    >
+                      <option value="">Unassigned</option>
+                      {Object.entries(teams).map(([id, t]) => (
+                        <option key={id} value={id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+              ))}
+              {Object.keys(players).length === 0 && (
+                <tr>
+                  <td className="empty-state" colSpan={6}>
+                    No players imported yet. Parse a demo to get started.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </section>
 
-      <section>
-        <button onClick={saveAll}>Save &amp; Publish (write JSON)</button>
-        <p>{status}</p>
-      </section>
-    </div>
+      <footer className="save-bar">
+        <div>
+          <h2>Ready to publish?</h2>
+          <p>{status || "Changes remain local until you save and publish them."}</p>
+        </div>
+        <button className="button button-primary" onClick={saveAll}>
+          Save &amp; publish
+        </button>
+      </footer>
+    </main>
   );
 }

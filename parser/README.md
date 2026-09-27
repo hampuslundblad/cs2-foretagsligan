@@ -12,6 +12,10 @@ pip install -r requirements.txt
 python parse_demo.py /path/to/match.dem
 ```
 
+For batch imports through the admin UI, place demo files in the repository's
+gitignored `demos/` directory and click **Parse demos**. Parsed filenames are
+recorded in `public/data/parsed-demos.json`, so they are not parsed again.
+
 Outputs JSON to stdout:
 
 ```json

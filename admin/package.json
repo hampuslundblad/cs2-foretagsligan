@@ -5,26 +5,34 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server/index.js",
+    "server": "tsx server/index.ts",
     "start": "concurrently -n vite,server -c blue,green \"npm:dev\" \"npm:server\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "cors": "^2.8.6",
     "dotenv": "^18.0.4",
     "express": "^5.2.1",
+    "lucide-react": "^0.575.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
+    "@tailwindcss/vite": "^4.1.0",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
     "oxlint": "^1.81.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.21.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
   }

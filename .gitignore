@@ -32,4 +32,4 @@ admin/dist
 # Python parser environment / artifacts
 parser/.venv
 parser/__pycache__
-*.dem
+demos/

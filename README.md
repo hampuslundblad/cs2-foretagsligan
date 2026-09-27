@@ -8,12 +8,13 @@ static site.
 ## Architecture
 
 ```
-.dem files
+`demos/*.dem` (gitignored)
    │  (Python + awpy)
    ▼
 SteamID64s ──► admin/ (local-only Express + React tool)
                  │   - runs parser
                  │   - resolves SteamID → FACEIT stats (key stays local)
+                 │   - validates and atomically saves player data
                  │   - assign players to teams / divisions
                  ▼
         public/data/*.json  (divisions.json, teams.json, players.json, meta.json)
@@ -27,9 +28,14 @@ SteamID64s ──► admin/ (local-only Express + React tool)
 
 - `src/` — public Vite + React site (built & deployed by CI)
 - `public/data/` — the committed JSON data consumed by the public site
-- `admin/` — local-only admin tool (parser runner + FACEIT fetch + data editor).
+- `admin/` — local-only TypeScript admin tool (parser runner + FACEIT fetch +
+  data editor).
   **Never built or deployed** — excluded from the CI workflow.
+  Its TypeScript Express server uses a small data-store layer for `players.json`:
+  player identity is stored alongside optional nested `faceit` data and validated
+  before saving.
 - `parser/` — Python `.dem` parser (uses [awpy](https://github.com/pnxenopoulos/awpy))
+- `demos/` — local, gitignored directory for demo files to import
 - `.github/workflows/deploy.yml` — builds `src/` and publishes to GitHub Pages
 
 ## One-time setup
@@ -54,12 +60,32 @@ Enable GitHub Pages: repo Settings → Pages → Source: **GitHub Actions**.
 If your GitHub Pages repo name isn't `cs2-foretagsligan`, update the `base`
 path in `vite.config.ts`.
 
+## UI components
+
+Both Vite apps are configured for [shadcn/ui](https://ui.shadcn.com). Add a
+component from the relevant application directory:
+
+```bash
+# Public site
+npx shadcn@latest add button
+
+# Admin tool
+cd admin && npx shadcn@latest add button
+```
+
+Components are generated under each app's `src/components/ui/` directory and
+can be imported with the `@/components/ui/...` alias.
+
 ## Updating data (manual workflow)
 
 1. `cd admin && npm run start` — launches the local admin UI (Vite) + its
    Express server (parser + FACEIT calls) together.
-2. In the admin UI: import a `.dem` file, resolve FACEIT stats, assign new
-   players to teams.
+2. Copy `.dem` files into the repository's `demos/` directory, then click
+   **Parse demos** in the admin UI. Successfully parsed filenames are saved
+   in `public/data/parsed-demos.json` and are skipped on future runs.
+   FACEIT lookup is enabled by default and can be disabled before importing.
+   Player identity and optional FACEIT data are stored together in
+   `public/data/players.json`; assign new players to teams.
 3. Click **Save & Publish** in the admin UI (writes `public/data/*.json`).
 4. From the repo root: `git add public/data && git commit -m "Update player data" && git push`
 5. GitHub Actions rebuilds and redeploys the public site automatically.

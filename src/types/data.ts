@@ -16,8 +16,12 @@ export interface Team {
 export type TeamsFile = Record<string, Team>; // keyed by team id
 
 export interface Player {
-  faceit_id: string | null;
   nickname: string;
+  faceit?: FaceitProfile;
+}
+
+export interface FaceitProfile {
+  faceit_id: string | null;
   avatar: string | null;
   elo: number | null;
   level: number | null;

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import type { Division, TeamsFile, PlayersFile, Meta } from "./types/data";
+import type {
+  Division,
+  TeamsFile,
+  PlayersFile,
+  Meta,
+} from "./types/data";
 import "./index.css";
 
 function useDataFile<T>(file: string, fallback: T): T {
@@ -23,10 +28,10 @@ export default function App() {
   const sortedDivisions = [...divisions].sort((a, b) => a.order - b.order);
 
   return (
-    <div style={{ fontFamily: "sans-serif", padding: 24, maxWidth: 1000, margin: "0 auto" }}>
+    <main className="public-app">
       <h1>CS2 Företagsligan</h1>
       {meta.last_updated && (
-        <p style={{ color: "#666", fontSize: 14 }}>
+        <p className="last-updated">
           Data last updated: {new Date(meta.last_updated).toLocaleString()}
         </p>
       )}
@@ -36,56 +41,58 @@ export default function App() {
           ([, t]) => t.division_id === division.id
         );
         return (
-          <section key={division.id} style={{ marginBottom: 40 }}>
+          <section key={division.id} className="division">
             <h2>{division.name}</h2>
             {divisionTeams.length === 0 && (
-              <p style={{ color: "#999" }}>No teams assigned yet.</p>
+              <p className="empty-message">No teams assigned yet.</p>
             )}
             {divisionTeams.map(([teamId, team]) => (
-              <div key={teamId} style={{ marginBottom: 24 }}>
+              <article key={teamId} className="team-card">
                 <h3>{team.name}</h3>
-                <table width="100%" cellPadding={6}>
-                  <thead>
-                    <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-                      <th>Player</th>
-                      <th>Elo</th>
-                      <th>Level</th>
-                      <th>K/D</th>
-                      <th>Win %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {team.player_ids.map((steamId) => {
-                      const p = players[steamId];
-                      if (!p) return null;
-                      return (
-                        <tr key={steamId}>
-                          <td>
-                            {p.avatar && (
-                              <img
-                                src={p.avatar}
-                                alt=""
-                                width={20}
-                                height={20}
-                                style={{ borderRadius: "50%", marginRight: 8, verticalAlign: "middle" }}
-                              />
-                            )}
-                            {p.nickname}
-                          </td>
-                          <td>{p.elo ?? "-"}</td>
-                          <td>{p.level ?? "-"}</td>
-                          <td>{p.kd ?? "-"}</td>
-                          <td>{p.winrate_pct ?? "-"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Player</th>
+                        <th>Elo</th>
+                        <th>Level</th>
+                        <th>K/D</th>
+                        <th>Win %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {team.player_ids.map((steamId) => {
+                        const p = players[steamId];
+                        if (!p) return null;
+                        return (
+                          <tr key={steamId}>
+                            <td>
+                              {p.faceit?.avatar && (
+                                <img
+                                  src={p.faceit.avatar}
+                                  alt=""
+                                  width={20}
+                                  height={20}
+                                  className="player-avatar"
+                                />
+                              )}
+                              {p.nickname}
+                            </td>
+                            <td>{p.faceit?.elo ?? "-"}</td>
+                            <td>{p.faceit?.level ?? "-"}</td>
+                            <td>{p.faceit?.kd ?? "-"}</td>
+                            <td>{p.faceit?.winrate_pct ?? "-"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
             ))}
           </section>
         );
       })}
-    </div>
+    </main>
   );
 }
