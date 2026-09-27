@@ -1,0 +1,5 @@
+[
+  { "id": "div-1", "name": "Division 1", "order": 1 },
+  { "id": "div-2a", "name": "Division 2A", "order": 2 },
+  { "id": "div-2b", "name": "Division 2B", "order": 3 }
+]
