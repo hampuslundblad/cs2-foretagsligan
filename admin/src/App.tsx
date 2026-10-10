@@ -8,8 +8,39 @@ import "./index.css";
 
 const API = "http://localhost:4000/api";
 
+interface TournamentMatch {
+  id: string;
+  opponents: {
+    participant?: { name?: string } | null;
+    score: number | null;
+  }[];
+  stage: { name: string };
+  round: { name: string; number: number };
+  scheduledDatetime: string | null;
+  status: string;
+}
+
+interface MatchesFile {
+  participant_name: string;
+  source: string;
+  fetched_at: string;
+  total_tournament_matches: number;
+  matching_matches: number;
+  matches: TournamentMatch[];
+}
+
 async function getJson<T>(file: string): Promise<T> {
   const res = await fetch(`${API}/data/${file}`);
+  if (!res.ok) throw new Error(`Failed to load ${file}: ${res.status}`);
+  return res.json();
+}
+
+async function getMatches(): Promise<MatchesFile> {
+  const res = await fetch(`${API}/matches`);
+  if (!res.ok) {
+    const data = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(data?.error ?? `Failed to load matches: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -22,9 +53,12 @@ async function putJson(file: string, data: unknown) {
 }
 
 export default function App() {
+  const [page, setPage] = useState<"dashboard" | "matches">("dashboard");
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [teams, setTeams] = useState<TeamsFile>({});
   const [players, setPlayers] = useState<PlayersFile>({});
+  const [matches, setMatches] = useState<MatchesFile | null>(null);
+  const [matchesError, setMatchesError] = useState("");
   const [fetchFaceitData, setFetchFaceitData] = useState(
     () => localStorage.getItem("fetch-faceit-data") !== "false"
   );
@@ -34,6 +68,9 @@ export default function App() {
     getJson<Division[]>("divisions.json").then(setDivisions);
     getJson<TeamsFile>("teams.json").then(setTeams);
     getJson<PlayersFile>("players.json").then(setPlayers);
+    getMatches().then(setMatches).catch((error: unknown) => {
+      setMatchesError(error instanceof Error ? error.message : String(error));
+    });
   }, []);
 
   function toggleFaceitFetching(enabled: boolean) {
@@ -145,6 +182,26 @@ export default function App() {
         <span className="local-badge">Local only</span>
       </header>
 
+      <nav className="admin-nav" aria-label="Admin pages">
+        <button
+          className={`nav-button${page === "dashboard" ? " is-active" : ""}`}
+          aria-current={page === "dashboard" ? "page" : undefined}
+          onClick={() => setPage("dashboard")}
+        >
+          Dashboard
+        </button>
+        <button
+          className={`nav-button${page === "matches" ? " is-active" : ""}`}
+          aria-current={page === "matches" ? "page" : undefined}
+          onClick={() => setPage("matches")}
+        >
+          Matches
+          {matches && <span className="nav-count">{matches.matching_matches}</span>}
+        </button>
+      </nav>
+
+      {page === "dashboard" ? (
+        <>
       <div className="admin-grid">
         <section className="admin-card import-card">
           <div className="card-heading">
@@ -271,6 +328,101 @@ export default function App() {
           Save &amp; publish
         </button>
       </footer>
+        </>
+      ) : (
+        <section className="admin-card matches-card">
+          <div className="card-heading matches-heading">
+            <div>
+              <p className="eyebrow">Accenture AB</p>
+              <h2>Our matches</h2>
+              <p>
+                {matches
+                  ? `${matches.matching_matches} matches · refreshed ${new Date(matches.fetched_at).toLocaleString()}`
+                  : "Loading match schedule..."}
+              </p>
+            </div>
+            {matches && (
+              <a
+                className="source-link"
+                href={matches.source}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Open Toornament
+              </a>
+            )}
+          </div>
+          {matchesError ? (
+            <p className="matches-error">
+              Could not load matches: {matchesError}. Run{" "}
+              <code>python fetch_accenture_matches.py</code> to generate the
+              match data.
+            </p>
+          ) : matches ? (
+            <div className="table-scroll">
+              <table className="matches-table">
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Division / round</th>
+                    <th>Matchup</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matches.matches.map((match) => (
+                    <tr key={match.id}>
+                      <td>
+                        {match.scheduledDatetime
+                          ? new Date(match.scheduledDatetime).toLocaleString(
+                              undefined,
+                              { dateStyle: "medium", timeStyle: "short" },
+                            )
+                          : "Not scheduled"}
+                      </td>
+                      <td>
+                        <strong>{match.stage.name}</strong>
+                        <span className="match-round">
+                          {match.round.name || `Round ${match.round.number}`}
+                        </span>
+                      </td>
+                      <td className="matchup-cell">
+                        <a
+                          className="match-link"
+                          href={`${matches.source}${match.id}/`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {match.opponents
+                            .map((opponent) => {
+                              const name = opponent.participant?.name ?? "TBD";
+                              return opponent.score === null
+                                ? name
+                                : `${name} (${opponent.score})`;
+                            })
+                            .join(" vs ")}
+                        </a>
+                      </td>
+                      <td>
+                        <span className={`match-status status-${match.status}`}>
+                          {match.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {matches.matches.length === 0 && (
+                    <tr>
+                      <td className="empty-state" colSpan={4}>
+                        No matches found for {matches.participant_name}.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </section>
+      )}
     </main>
   );
 }

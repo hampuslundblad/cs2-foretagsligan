@@ -44,6 +44,7 @@ app.use(express.json());
 const PORT = Number(process.env.ADMIN_SERVER_PORT ?? 4000);
 const FACEIT_API_KEY = process.env.FACEIT_API_KEY;
 const DATA_DIR = path.resolve(currentDirectory, "../../public/data");
+const MATCHES_FILE = path.resolve(currentDirectory, "../../accenture-ab-matches.json");
 const PARSER_SCRIPT = path.resolve(currentDirectory, "../../parser/parse_demo.py");
 const DEMO_DIR = path.resolve(currentDirectory, "../../demos");
 const PARSED_DEMOS_FILE = "parsed-demos.json";
@@ -59,6 +60,14 @@ const dataFiles = new Set([
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
+
+app.get("/api/matches", (_req, res) => {
+  try {
+    return res.json(JSON.parse(fs.readFileSync(MATCHES_FILE, "utf-8")));
+  } catch (error) {
+    return res.status(500).json({ error: errorMessage(error) });
+  }
+});
 
 function parseDemo(demoPath: string): Promise<DemoParseResult> {
   return new Promise((resolve, reject) => {
